@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import aiohttp
 import aiofiles
 from pyrogram import Client, filters
-from pyrogram.errors import FloodWait
+from pyrogram.errors import FloodWait, UserNotParticipant
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 from config import Config
@@ -27,6 +27,7 @@ bot = Client(
     workers=100
 )
 
+
 # --- Multi-Client Initialization ---
 class TokenParser:
     @staticmethod
@@ -38,51 +39,55 @@ class TokenParser:
             )
         }
 
+
 async def start_client(client_id, bot_token):
     try:
         print(f"Attempting to start Client: {client_id}")
         client = await Client(
             name=str(client_id), api_id=Config.API_ID, api_hash=Config.API_HASH,
-            bot_token=bot_token, sleep_threshold=100, no_updates=True, in_memory=True
+            bot_token=bot_token, no_updates=True, in_memory=True
         ).start()
         work_loads[client_id] = 0
         multi_clients[client_id] = client
         print(f"Client {client_id} started successfully.")
-    except FloodWait as e:
-        print(f"FloodWait for Client {client_id}. Waiting for {e.value} seconds...")
-        await asyncio.sleep(e.value + 5)
-        await start_client(client_id, bot_token)
     except Exception as e:
         print(f"!!! CRITICAL ERROR: Failed to start Client {client_id} - Error: {e}")
+
 
 async def initialize_clients(main_bot_instance):
     multi_clients[0] = main_bot_instance
     work_loads[0] = 0
     
-    # --- YAHAN FIX ADD KIYA GAYA HAI ---
+    # --- YAHAN CHANNEL ID FETCH KARNE KA FIX HAI ---
     try:
-        print("Pre-caching essential channel information...")
-        await main_bot_instance.get_chat(Config.LOG_CHANNEL)
-        await main_bot_instance.get_chat(Config.STORAGE_CHANNEL)
-        print("Channel information cached successfully.")
+        print("Fetching essential channel information using invite links...")
+        # Link se chat object fetch karna
+        log_chat = await main_bot_instance.get_chat(Config.LOG_CHANNEL_LINK)
+        storage_chat = await main_bot_instance.get_chat(Config.STORAGE_CHANNEL_LINK)
+        # Sahi ID ko Config object mein save karna
+        Config.LOG_CHANNEL = log_chat.id
+        Config.STORAGE_CHANNEL = storage_chat.id
+        print(f"Channels identified: LOG_CHANNEL={Config.LOG_CHANNEL}, STORAGE_CHANNEL={Config.STORAGE_CHANNEL}")
+    except UserNotParticipant:
+        print("!!! FATAL ERROR: The main bot is not a member of one of the channels. Please add it and restart.")
+        return
     except Exception as e:
-        print(f"!!! WARNING: Could not fetch channel info. Make sure bot is an admin in LOG_CHANNEL & STORAGE_CHANNEL. Error: {e}")
+        print(f"!!! FATAL ERROR: Could not get channel info from links. Error: {e}")
+        return
     # --- FIX YAHAN KHATAM HOTA HAI ---
 
     all_tokens = TokenParser.parse_from_env()
     if not all_tokens:
-        print("No additional clients found. Using default bot only.")
-        return
+        print("No additional clients found. Using default bot only."); return
     
-    print(f"Found {len(all_tokens)} extra clients. Starting them one by one with a delay.")
+    print(f"Found {len(all_tokens)} extra clients. Starting them with a delay.")
     for i, token in all_tokens.items():
         await start_client(i, token)
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
 
     if len(multi_clients) > 1:
         print(f"Multi-Client Mode Enabled. Total Clients: {len(multi_clients)}")
-    else:
-        print("Single Client Mode.")
+
 
 # --- Helper Functions ---
 def get_readable_file_size(size_in_bytes):
@@ -93,14 +98,6 @@ def get_readable_file_size(size_in_bytes):
         size_in_bytes /= power; n += 1
     return f"{size_in_bytes:.2f} {power_labels[n]}B"
 
-async def edit_message_with_retry(message, text):
-    try:
-        await message.edit_text(text)
-    except FloodWait as e:
-        await asyncio.sleep(e.value + 5)
-        await message.edit_text(text)
-    except Exception as e:
-        print(f"Error editing message: {e}")
 
 # --- Bot Handlers ---
 @bot.on_message(filters.command("start") & filters.private)
@@ -118,6 +115,7 @@ Welcome to Sharing Box Bot. I can help you create permanent, shareable links for
 I will instantly give you a special link that you can share with anyone!
 """
     await message.reply_text(start_text)
+
 
 async def handle_file_upload(message: Message, user_id: int):
     try:
@@ -137,15 +135,15 @@ async def handle_file_upload(message: Message, user_id: int):
             reply_markup=button,
             quote=True
         )
-
     except Exception as e:
-        error_trace = traceback.format_exc()
-        print(f"!!! ERROR in handle_file_upload: {e}\n{error_trace}")
-        await message.reply_text("Sorry, something went wrong. Please try again later.")
+        print(f"!!! ERROR in handle_file_upload: {traceback.format_exc()}")
+        await message.reply_text("Sorry, something went wrong.")
+
 
 @bot.on_message(filters.private & (filters.document | filters.video | filters.audio))
 async def file_handler(client, message: Message):
     await handle_file_upload(message, message.from_user.id)
+
 
 @bot.on_message(filters.command("url") & filters.private & filters.user(Config.OWNER_ID))
 async def url_upload_handler(client, message: Message):
@@ -158,38 +156,23 @@ async def url_upload_handler(client, message: Message):
 
     if not os.path.exists('downloads'): os.makedirs('downloads')
     file_path = os.path.join('downloads', file_name)
-    last_edit_time = 0
-
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=None) as resp:
                 if resp.status != 200:
                     await status_msg.edit_text(f"Download failed! Status: {resp.status}"); return
-                total_size = int(resp.headers.get('content-length', 0))
-                downloaded_size = 0
+                
                 async with aiofiles.open(file_path, 'wb') as f:
                     async for chunk in resp.content.iter_chunked(1024 * 1024):
                         await f.write(chunk)
-                        downloaded_size += len(chunk)
-                        current_time = time.time()
-                        if current_time - last_edit_time > 2:
-                            last_edit_time = current_time
-                            await edit_message_with_retry(status_msg, f"**Downloading...**\n`{get_readable_file_size(downloaded_size)}` of `{get_readable_file_size(total_size)}`")
     except Exception as e:
         await status_msg.edit_text(f"Download Error: {e}")
         if os.path.exists(file_path): os.remove(file_path)
         return
     
-    last_edit_time = 0
-    async def progress(current, total):
-        nonlocal last_edit_time
-        current_time = time.time()
-        if current_time - last_edit_time > 2:
-            last_edit_time = current_time
-            await edit_message_with_retry(status_msg, f"**Uploading...**\n`{get_readable_file_size(current)}` of `{get_readable_file_size(total)}`")
-
     try:
-        sent_message = await client.send_document(chat_id=Config.STORAGE_CHANNEL, document=file_path, progress=progress)
+        sent_message = await client.send_document(chat_id=Config.STORAGE_CHANNEL, document=file_path)
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
