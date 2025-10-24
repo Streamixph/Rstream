@@ -22,8 +22,10 @@ class_cache = {}
 # =======================================================
 # == HEALTH CHECK ROUTE FOR RENDER (Sabse Upar)        ==
 # =======================================================
-@app.get("/")
+# ...
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
+    """Health check route for Render that handles GET and HEAD"""
     return {"status": "ok", "message": "Server is healthy and running!"}
 # =======================================================
 
