@@ -1,3 +1,5 @@
+# webserver.py
+
 import math
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -17,10 +19,13 @@ work_loads = {}
 
 class_cache = {}
 
+# =======================================================
+# == HEALTH CHECK ROUTE FOR RENDER (Sabse Upar)        ==
+# =======================================================
 @app.get("/")
 async def root():
-    """Health check route for Render"""
-    return {"status": "ok", "message": "Bot is running!"}
+    return {"status": "ok", "message": "Server is healthy and running!"}
+# =======================================================
 
 # Helper function
 def get_readable_file_size(size_in_bytes):
@@ -83,8 +88,10 @@ class ByteStreamer:
 @app.get("/show/{unique_id}")
 async def show_file_page(request: Request, unique_id: str):
     try:
-        main_bot = multi_clients[0] # Get the main bot instance
-        async for msg in main_bot.get_chat_history(Config.LOG_CHANNEL, limit=1000):
+        main_bot = multi_clients.get(0)
+        if not main_bot: raise HTTPException(503, "Bot not initialized yet")
+
+        async for msg in main_bot.get_chat_history(Config.LOG_CHANNEL, limit=2000): # Limit badha di hai
             if msg.text and f"Unique ID: `{unique_id}`" in msg.text:
                 storage_msg_id = int(msg.text.split("Storage Msg ID: `")[1].split("`")[0])
                 
@@ -138,13 +145,13 @@ async def stream_handler(request: Request, msg_id: int, file_name: str):
         file_id = FileId.decode(media.file_id)
         file_size = media.file_size
         
+        from_bytes = 0
+        until_bytes = file_size - 1
         if range_header:
-            from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
-            from_bytes = int(from_bytes)
-            until_bytes = int(until_bytes) if until_bytes else file_size - 1
-        else:
-            from_bytes = 0
-            until_bytes = file_size - 1
+            from_bytes_str, until_bytes_str = range_header.replace("bytes=", "").split("-")
+            from_bytes = int(from_bytes_str)
+            if until_bytes_str:
+                until_bytes = int(until_bytes_str)
 
         if (until_bytes >= file_size) or (from_bytes < 0):
             raise HTTPException(416)
@@ -162,7 +169,7 @@ async def stream_handler(request: Request, msg_id: int, file_name: str):
             content=body,
             status_code=206 if range_header else 200,
             headers={
-                "Content-Type": media.mime_type,
+                "Content-Type": media.mime_type or "application/octet-stream",
                 "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
                 "Content-Length": str(req_length),
                 "Accept-Ranges": "bytes",
@@ -170,7 +177,7 @@ async def stream_handler(request: Request, msg_id: int, file_name: str):
             },
         )
     except FileNotFoundError:
-        raise HTTPException(404)
+        raise HTTPException(404, "File not found on Telegram.")
     except Exception as e:
         print(e)
-        raise HTTPException(500)
+        raise HTTPException(500, "Internal streaming error.")
