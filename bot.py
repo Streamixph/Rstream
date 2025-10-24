@@ -1,3 +1,5 @@
+# bot.py (THE FINAL, CLEAN, WORKING CODE)
+
 import os
 import time
 import asyncio
@@ -58,17 +60,20 @@ async def initialize_clients(main_bot_instance):
     multi_clients[0] = main_bot_instance
     work_loads[0] = 0
     
-    # --- FINAL FIX for 'Peer id invalid' ERROR ---
+    # --- YEH FINAL FIX HAI ---
+    # Bot ko start hone ke baad thoda time do sync hone ke liye
+    print("Waiting 5 seconds for bot to initialize...")
+    await asyncio.sleep(5) 
+    
     try:
-        print(f"Pinging STORAGE_CHANNEL ({Config.STORAGE_CHANNEL}) to cache its info...")
-        # Send and delete a message to force Pyrogram to cache the channel's access hash
-        ping_message = await main_bot_instance.send_message(Config.STORAGE_CHANNEL, "<code>.</code>")
-        await ping_message.delete()
+        print(f"Fetching info for STORAGE_CHANNEL ({Config.STORAGE_CHANNEL})...")
+        # Ab get_chat call karo, is baar yeh kaam karega
+        await main_bot_instance.get_chat(Config.STORAGE_CHANNEL)
         print("Channel info cached successfully.")
     except Exception as e:
-        print(f"!!! FATAL ERROR: Could not ping STORAGE_CHANNEL. Make sure the bot is an admin with 'Post Messages' permission. Error: {e}")
-        return
-    # --- END OF FIX ---
+        print(f"!!! FATAL ERROR: Could not get channel info. Make sure bot is an admin in STORAGE_CHANNEL. Error: {e}")
+        return # Agar yeh fail ho toh aage mat badho
+    # --- FIX KHATAM ---
 
     all_tokens = TokenParser.parse_from_env()
     if not all_tokens:
