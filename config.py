@@ -10,8 +10,8 @@ class Config:
     API_HASH = os.environ.get("API_HASH", "")
     BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
     OWNER_ID = int(os.environ.get("OWNER_ID", 0))
-    
     STORAGE_CHANNEL = int(os.environ.get("STORAGE_CHANNEL", 0))
+print(f"DEBUG: Loaded STORAGE_CHANNEL ID is {STORAGE_CHANNEL}")
     
     BASE_URL = os.environ.get("BASE_URL", "").rstrip('/')
     DATABASE_URL = os.environ.get("DATABASE_URL", "")
