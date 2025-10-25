@@ -1,15 +1,12 @@
-# app.py (FINAL CODE WITH BLOGGER LINK)
+# app.py (FINAL, CLEAN, AND EASY-TO-UNDERSTAND CODE)
 
 import os
 import asyncio
 import secrets
 import traceback
 import uvicorn
-from urllib.parse import urlparse
 from contextlib import asynccontextmanager
 
-import aiohttp
-import aiofiles
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ChatMemberUpdated
 from pyrogram.errors import FloodWait
@@ -21,180 +18,334 @@ from pyrogram import raw
 from pyrogram.session import Session, Auth
 import math
 
-# Imports from your other project files
+# Project ki dusri files se important cheezein import karo
 from config import Config
 from database import db
 
-# --- Global Variables and Lifespan Manager ---
+# =====================================================================================
+# --- SETUP: BOT AUR WEB SERVER KO TAIYAAR KARNA ---
+# =====================================================================================
 
+# FastAPI ka 'lifespan' manager. Yeh bot ko web server ke saath start aur stop karta hai.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("--- Lifespan event: STARTUP ---")
+    print("--- SERVER STARTUP: Lifespan event shuru ho raha hai ---")
+    
+    # Database se connect karo
     await db.connect()
+    
     try:
-        print("Starting Pyrogram client in background...")
+        # Pyrogram bot ko background mein start karo
+        print("Pyrogram bot ko start kar raha hai...")
         await bot.start()
-        print(f"Bot [@{bot.me.username}] started successfully.")
-        print(f"Verifying channel access for {Config.STORAGE_CHANNEL}...")
+        print(f"✅ Bot [@{bot.me.username}] safaltapoorvak start ho gaya.")
+        
+        # Storage channel ko check karo
+        print(f"Storage channel ({Config.STORAGE_CHANNEL}) ko check kar raha hai...")
         await bot.get_chat(Config.STORAGE_CHANNEL)
-        print("✅ Channel is accessible.")
+        print("✅ Storage channel accessible hai.")
+        
+        # Agar channel mein koi anjaan member hai, toh use hatao
         try:
             await cleanup_channel(bot)
         except Exception as e:
-            print(f"Warning: Initial channel cleanup failed, but continuing startup. Error: {e}")
+            print(f"Warning: Channel cleanup fail ho gaya, lekin bot chalta rahega. Error: {e}")
+
+        # Multi-client setup (abhi ke liye sirf main bot)
         multi_clients[0] = bot
         work_loads[0] = 0
-        print("--- Lifespan startup complete. Bot is running in the background. ---")
+        
+        print("--- SERVER STARTUP: Lifespan safaltapoorvak poora hua. Bot background mein chal raha hai. ---")
+    
     except Exception as e:
-        print(f"!!! FATAL ERROR during bot startup in lifespan: {traceback.format_exc()}")
-    yield
-    print("--- Lifespan event: SHUTDOWN ---")
+        print(f"!!! FATAL ERROR: Bot startup ke dauraan error aa gaya: {traceback.format_exc()}")
+    
+    yield  # Ab web server requests lena shuru karega
+    
+    # Server band hone par yeh code chalega
+    print("--- SERVER SHUTDOWN: Lifespan event shuru ho raha hai ---")
     if bot.is_initialized:
         await bot.stop()
-    print("--- Lifespan shutdown complete ---")
+    print("--- SERVER SHUTDOWN: Lifespan poora hua. ---")
 
+# FastAPI app ko lifespan ke saath initialize karo
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
+
+# Pyrogram bot ko initialize karo
 bot = Client("SimpleStreamBot", api_id=Config.API_ID, api_hash=Config.API_HASH, bot_token=Config.BOT_TOKEN, in_memory=True)
+
+# Global Dictionaries
 multi_clients = {}
 work_loads = {}
 class_cache = {}
 
-# --- Helper Functions ---
+# =====================================================================================
+# --- HELPER FUNCTIONS: Chote-mote kaam karne wale functions ---
+# =====================================================================================
+
 def get_readable_file_size(size_in_bytes):
-    if not size_in_bytes: return '0B'
-    power = 1024; n = 0; power_labels = {0: '', 1: 'K', 2: 'M', 3: 'G'}
+    """File size ko KB, MB, GB mein convert karta hai."""
+    if not size_in_bytes:
+        return '0B'
+    power = 1024
+    n = 0
+    power_labels = {0: 'B', 1: 'KB', 2: 'MB', 3: 'GB'}
     while size_in_bytes >= power and n < len(power_labels) - 1:
         size_in_bytes /= power
         n += 1
-    return f"{size_in_bytes:.2f} {power_labels[n]}B"
+    return f"{size_in_bytes:.2f} {power_labels[n]}"
 
 def mask_filename(name: str):
-    if not name: return "Protected File"
-    resolutions = ["2160p", "1080p", "720p", "480p", "360p"]; res_part = ""
+    """File ka naam thoda chupa deta hai."""
+    if not name:
+        return "Protected File"
+    resolutions = ["2160p", "1080p", "720p", "480p", "360p"]
+    res_part = ""
     for res in resolutions:
-        if res in name: res_part = f" {res}"; name = name.replace(res, ""); break
-    base, ext = os.path.splitext(name); masked_base = ''.join(c if (i % 3 == 0 and c.isalnum()) else '*' for i, c in enumerate(base))
+        if res in name:
+            res_part = f" {res}"
+            name = name.replace(res, "")
+            break
+    base, ext = os.path.splitext(name)
+    masked_base = ''.join(c if (i % 3 == 0 and c.isalnum()) else '*' for i, c in enumerate(base))
     return f"{masked_base}{res_part}{ext}"
 
-# --- Pyrogram Bot Handlers ---
+# =====================================================================================
+# --- PYROGRAM BOT HANDLERS: Telegram se aane wale commands ko handle karna ---
+# =====================================================================================
 
 @bot.on_message(filters.command("start") & filters.private)
 async def start_command(_, message: Message):
+    """/start command ka jawab deta hai."""
     user_name = message.from_user.first_name
-    await message.reply_text(f"👋 **Hello, {user_name}!**\nI'm a file-to-link bot.")
+    reply_text = f"""
+👋 **Hello, {user_name}!**
+
+Welcome to Sharing Box Bot. I can help you create permanent, shareable links for your files.
+
+**How to use me:**
+Just send or forward any file to this chat.
+
+I will instantly give you a special link that you can share with anyone!
+"""
+    await message.reply_text(reply_text)
 
 async def handle_file_upload(message: Message, user_id: int):
+    """File milne par link generate karta hai."""
     try:
         sent_message = await message.copy(chat_id=Config.STORAGE_CHANNEL)
         unique_id = secrets.token_urlsafe(8)
         await db.save_link(unique_id, sent_message.id)
         
-        # --- YAHAN BADLAV KIYA GAYA HAI ---
-        # Ab yeh Blogger URL check karega
         final_link = f"{Config.BLOGGER_PAGE_URL}?id={unique_id}" if Config.BLOGGER_PAGE_URL else f"{Config.BASE_URL}/show/{unique_id}"
         
+        reply_text = f"""
+✅ Your shareable link has been generated!
+
+Tap to copy the link below:
+`{final_link}`
+"""
         button = InlineKeyboardMarkup([[InlineKeyboardButton("Open Your Link 🔗", url=final_link)]])
-        await message.reply_text("✅ Your shareable link has been generated!", reply_markup=button, quote=True)
+        await message.reply_text(reply_text, reply_markup=button, quote=True, disable_web_page_preview=True)
     except Exception as e:
-        print(f"!!! ERROR in handle_file_upload: {traceback.format_exc()}"); await message.reply_text("Sorry, something went wrong.")
+        print(f"!!! ERROR in handle_file_upload: {traceback.format_exc()}")
+        await message.reply_text("Sorry, something went wrong.")
 
 @bot.on_message(filters.private & (filters.document | filters.video | filters.audio))
 async def file_handler(_, message: Message):
+    """Har file (doc, video, audio) ko handle karta hai."""
     await handle_file_upload(message, message.from_user.id)
 
-# ... (baaki saare handlers jaise url_upload_handler, gatekeeper, etc. same rahenge)
-@bot.on_message(filters.command("url") & filters.private & filters.user(Config.OWNER_ID))
-async def url_upload_handler(_,m:Message):
-    if len(m.command)<2: await m.reply_text("Usage: `/url <link>`"); return
-    url=m.command[1]; fname=os.path.basename(urlparse(url).path) or f"file_{int(asyncio.get_running_loop().time())}"; smsg=await m.reply_text("Processing...")
-    fpath=os.path.join('downloads',fname)
-    if not os.path.exists('downloads'): os.makedirs('downloads')
-    try:
-        async with aiohttp.ClientSession() as s,s.get(url,timeout=None) as r:
-            if r.status!=200: await smsg.edit_text(f"Download failed: {r.status}"); return
-            async with aiofiles.open(fpath,'wb') as f:
-                async for c in r.content.iter_chunked(1024*1024): await f.write(c)
-    except Exception as e: await smsg.edit_text(f"Error: {e}");
-    if os.path.exists(fpath): os.remove(fpath); return
-    try: sm=await bot.send_document(Config.STORAGE_CHANNEL,fpath); await handle_file_upload(sm,m.from_user.id); await smsg.delete()
-    finally:
-        if os.path.exists(fpath): os.remove(fpath)
-@bot.on_chat_member_updated(filters.chat(Config.STORAGE_CHANNEL))
-async def simple_gatekeeper(c:Client,m_update:ChatMemberUpdated):
-    try:
-        if(m_update.new_chat_member and m_update.new_chat_member.status==enums.ChatMemberStatus.MEMBER):
-            u=m_update.new_chat_member.user
-            if u.id==Config.OWNER_ID or u.is_self: return
-            print(f"Gatekeeper: Kicking {u.id}"); await c.ban_chat_member(Config.STORAGE_CHANNEL,u.id); await c.unban_chat_member(Config.STORAGE_CHANNEL,u.id)
-    except Exception as e: print(f"Gatekeeper Error: {e}")
-async def cleanup_channel(c:Client):
-    print("Gatekeeper: Running cleanup..."); allowed={Config.OWNER_ID,c.me.id}
-    try:
-        async for m in c.get_chat_members(Config.STORAGE_CHANNEL):
-            if m.user.id in allowed: continue
-            if m.status in [enums.ChatMemberStatus.ADMINISTRATOR,enums.ChatMemberStatus.OWNER]: continue
-            try: print(f"Cleanup: Kicking {m.user.id}"); await c.ban_chat_member(Config.STORAGE_CHANNEL,m.user.id); await asyncio.sleep(1)
-            except FloodWait as e: await asyncio.sleep(e.value)
-            except Exception as e: print(f"Cleanup Error: {e}")
-    except Exception as e: print(f"Cleanup Error: {e}")
-class ByteStreamer:
-    def __init__(self,c:Client):self.client=c
-    @staticmethod
-    async def get_location(f:FileId): return raw.types.InputDocumentFileLocation(id=f.media_id,access_hash=f.access_hash,file_reference=f.file_reference,thumb_size=f.thumbnail_size)
-    async def yield_file(self,f:FileId,i:int,o:int,fc:int,lc:int,pc:int,cs:int):
-        c=self.client;work_loads[i]+=1;ms=c.media_sessions.get(f.dc_id)
-        if ms is None:
-            if f.dc_id!=await c.storage.dc_id():
-                ak=await Auth(c,f.dc_id,await c.storage.test_mode()).create();ms=Session(c,f.dc_id,ak,await c.storage.test_mode(),is_media=True);await ms.start();ea=await c.invoke(raw.functions.auth.ExportAuthorization(dc_id=f.dc_id));await ms.invoke(raw.functions.auth.ImportAuthorization(id=ea.id,bytes=ea.bytes))
-            else:ms=c.session
-            c.media_sessions[f.dc_id]=ms
-        loc=await self.get_location(f);cp=1
-        try:
-            while cp<=pc:
-                r=await ms.invoke(raw.functions.upload.GetFile(location=loc,offset=o,limit=cs),retries=0)
-                if isinstance(r,raw.types.upload.File):
-                    chk=r.bytes
-                    if not chk:break
-                    if pc==1:yield chk[fc:lc]
-                    elif cp==1:yield chk[fc:]
-                    elif cp==pc:yield chk[:lc]
-                    else:yield chk
-                    cp+=1;o+=cs
-                else:break
-        finally:work_loads[i]-=1
-@app.get("/show/{uid}",response_class=HTMLResponse)
-async def show_page(r:Request,uid:str):
-    mid=await db.get_link(uid)
-    if not mid:raise HTTPException(404)
-    mb=multi_clients.get(0);
-    if not mb:raise HTTPException(503)
-    fmsg=await mb.get_messages(Config.STORAGE_CHANNEL,mid);m=fmsg.document or fmsg.video or fmsg.audio
-    if not m:raise HTTPException(404)
-    oname=m.file_name or "file";sname="".join(c for c in oname if c.isalnum() or c in (' ','.','_','-')).rstrip()
-    ctx={"request":r,"file_name":mask_filename(oname),"file_size":get_readable_file_size(m.file_size),"is_media":(m.mime_type or "").startswith(("v","a")),"direct_dl_link":f"{Config.BASE_URL}/dl/{mid}/{sname}","mx_player_link":f"intent:{Config.BASE_URL}/dl/{mid}/{sname}#Intent;action=android.intent.action.VIEW;type={m.mime_type or 'v/*'};end","vlc_player_link":f"vlc://{Config.BASE_URL}/dl/{mid}/{sname}"}
-    return templates.TemplateResponse("show.html",ctx)
-@app.get("/dl/{mid}/{fname}")
-async def stream_media(r:Request,mid:int,fname:str):
-    i=min(work_loads,key=work_loads.get,default=0);c=multi_clients.get(i)
-    if not c:raise HTTPException(503)
-    tc=class_cache.get(c) or ByteStreamer(c);class_cache[c]=tc
-    try:
-        msg=await c.get_messages(Config.STORAGE_CHANNEL,mid);m=msg.document or msg.video or msg.audio
-        if not m or msg.empty:raise FileNotFoundError
-        fid=FileId.decode(m.file_id);fsize=m.file_size;rh=r.headers.get("Range",0);fb,ub=0,fsize-1
-        if rh:fbs,ubs=rh.replace("bytes=","").split("-");fb=int(fbs)
-        if 'ubs' in locals() and ubs:ub=int(ubs)
-        if(ub>=fsize)or(fb<0):raise HTTPException(416)
-        rl=ub-fb+1;cs=1024*1024;off=(fb//cs)*cs;fc=fb-off;lc=(ub%cs)+1;pc=math.ceil(rl/cs)
-        body=tc.yield_file(fid,i,off,fc,lc,pc,cs);sc=206 if rh else 200
-        hdrs={"Content-Type":m.mime_type or "application/octet-stream","Accept-Ranges":"bytes","Content-Disposition":f'inline; filename="{m.file_name}"',"Content-Length":str(rl)}
-        if rh:hdrs["Content-Range"]=f"bytes {fb}-{ub}/{fsize}"
-        return StreamingResponse(body,status_code=sc,headers=hdrs)
-    except FileNotFoundError:raise HTTPException(404)
-    except Exception:print(traceback.format_exc());raise HTTPException(500)
+# --- GATEKEEPER LOGIC ---
 
-# --- Main Execution Block ---
+@bot.on_chat_member_updated(filters.chat(Config.STORAGE_CHANNEL))
+async def simple_gatekeeper(client: Client, member_update: ChatMemberUpdated):
+    """Channel mein join karne wale anjaan logo ko kick karta hai."""
+    try:
+        if (member_update.new_chat_member and member_update.new_chat_member.status == enums.ChatMemberStatus.MEMBER):
+            user = member_update.new_chat_member.user
+            if user.id == Config.OWNER_ID or user.is_self:
+                return
+            print(f"Gatekeeper: Anjaan user '{user.first_name}' ({user.id}) ne join kiya. Kick kar raha hai...")
+            await client.ban_chat_member(Config.STORAGE_CHANNEL, user.id)
+            await client.unban_chat_member(Config.STORAGE_CHANNEL, user.id)
+            print(f"Gatekeeper: User {user.id} ko safaltapoorvak kick kar diya.")
+    except Exception as e:
+        print(f"Gatekeeper Error: {e}")
+
+async def cleanup_channel(client: Client):
+    """Bot start hone par channel ko saaf karta hai."""
+    print("Gatekeeper: Startup par channel cleanup shuru kar raha hai...")
+    allowed_members = {Config.OWNER_ID, client.me.id}
+    try:
+        async for member in client.get_chat_members(Config.STORAGE_CHANNEL):
+            if member.user.id in allowed_members:
+                continue
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                continue
+            try:
+                print(f"Gatekeeper Cleanup: Anjaan member {member.user.id} mila. Kick kar raha hai...")
+                await client.ban_chat_member(Config.STORAGE_CHANNEL, member.user.id)
+                await asyncio.sleep(1)
+            except FloodWait as e:
+                await asyncio.sleep(e.value)
+            except Exception as e:
+                print(f"Gatekeeper Cleanup: {member.user.id} ko kick nahi kar paaya. Error: {e}")
+        print("Gatekeeper: Channel cleanup poora hua.")
+    except Exception as e:
+        print(f"Gatekeeper Cleanup: Members ki list nahi mil paayi. Error: {e}")
+
+# =====================================================================================
+# --- FASTAPI WEB SERVER: Browser se aane wali requests ko handle karna ---
+# =====================================================================================
+
+class ByteStreamer:
+    """Telegram se file ke parts download karne ka kaam karta hai."""
+    def __init__(self, client: Client):
+        self.client = client
+    
+    @staticmethod
+    async def get_location(file_id: FileId):
+        return raw.types.InputDocumentFileLocation(
+            id=file_id.media_id, access_hash=file_id.access_hash,
+            file_reference=file_id.file_reference, thumb_size=file_id.thumbnail_size
+        )
+        
+    async def yield_file(self, file_id: FileId, index: int, offset: int, first_part_cut: int, last_part_cut: int, part_count: int, chunk_size: int):
+        client = self.client
+        work_loads[index] += 1
+        media_session = client.media_sessions.get(file_id.dc_id)
+        if media_session is None:
+            if file_id.dc_id != await client.storage.dc_id():
+                auth = await Auth(client, file_id.dc_id, await client.storage.test_mode()).create()
+                media_session = Session(client, file_id.dc_id, auth, await client.storage.test_mode(), is_media=True)
+                await media_session.start()
+                exported_auth = await client.invoke(raw.functions.auth.ExportAuthorization(dc_id=file_id.dc_id))
+                await media_session.invoke(raw.functions.auth.ImportAuthorization(id=exported_auth.id, bytes=exported_auth.bytes))
+            else:
+                media_session = client.session
+            client.media_sessions[file_id.dc_id] = media_session
+        
+        location = await self.get_location(file_id)
+        current_part = 1
+        try:
+            while current_part <= part_count:
+                chunk = await media_session.invoke(
+                    raw.functions.upload.GetFile(location=location, offset=offset, limit=chunk_size),
+                    retries=0
+                )
+                if not isinstance(chunk, raw.types.upload.File):
+                    break
+                
+                if part_count == 1: yield chunk.bytes[first_part_cut:last_part_cut]
+                elif current_part == 1: yield chunk.bytes[first_part_cut:]
+                elif current_part == part_count: yield chunk.bytes[:last_part_cut]
+                else: yield chunk.bytes
+                
+                current_part += 1
+                offset += chunk_size
+        finally:
+            work_loads[index] -= 1
+
+@app.get("/show/{unique_id}", response_class=HTMLResponse)
+async def show_page(request: Request, unique_id: str):
+    """Download page dikhata hai."""
+    db_result = await db.get_link(unique_id)
+    if not db_result:
+        raise HTTPException(status_code=404, detail="Link expired or invalid.")
+    
+    message_id = db_result
+    main_bot = multi_clients.get(0)
+    if not main_bot:
+        raise HTTPException(status_code=503, detail="Bot is not ready.")
+        
+    try:
+        message = await main_bot.get_messages(Config.STORAGE_CHANNEL, message_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found on Telegram.")
+        
+    media = message.document or message.video or message.audio
+    if not media:
+        raise HTTPException(status_code=404, detail="Media not found in the message.")
+        
+    file_name = media.file_name or "file"
+    safe_file_name = "".join(c for c in file_name if c.isalnum() or c in (' ', '.', '_', '-')).rstrip()
+    mime_type = media.mime_type or "application/octet-stream"
+
+    context = {
+        "request": request,
+        "file_name": mask_filename(file_name),
+        "file_size": get_readable_file_size(media.file_size),
+        "is_media": mime_type.startswith(("video", "audio")),
+        "direct_dl_link": f"{Config.BASE_URL}/dl/{message_id}/{safe_file_name}",
+        "mx_player_link": f"intent:{Config.BASE_URL}/dl/{message_id}/{safe_file_name}#Intent;action=android.intent.action.VIEW;type={mime_type};end",
+        "vlc_player_link": f"vlc://{Config.BASE_URL}/dl/{message_id}/{safe_file_name}"
+    }
+    return templates.TemplateResponse("show.html", context)
+
+@app.get("/dl/{message_id}/{file_name}")
+async def stream_media(request: Request, message_id: int, file_name: str):
+    """File ko stream ya download karwata hai."""
+    client = multi_clients.get(min(work_loads, key=work_loads.get, default=0))
+    if not client:
+        raise HTTPException(status_code=503, detail="No available clients.")
+        
+    streamer = class_cache.get(client) or ByteStreamer(client)
+    class_cache[client] = streamer
+    
+    try:
+        message = await client.get_messages(Config.STORAGE_CHANNEL, message_id)
+        media = message.document or message.video or message.audio
+        if not media or message.empty:
+            raise FileNotFoundError
+            
+        file_id = FileId.decode(media.file_id)
+        file_size = media.file_size
+        range_header = request.headers.get("Range", "")
+        
+        from_bytes, until_bytes = 0, file_size - 1
+        if range_header:
+            range_parts = range_header.replace("bytes=", "").split("-")
+            from_bytes = int(range_parts[0])
+            if len(range_parts) > 1 and range_parts[1]:
+                until_bytes = int(range_parts[1])
+        
+        if (until_bytes >= file_size) or (from_bytes < 0):
+            raise HTTPException(status_code=416)
+            
+        req_length = until_bytes - from_bytes + 1
+        chunk_size = 1024 * 1024
+        offset = (from_bytes // chunk_size) * chunk_size
+        first_part_cut = from_bytes - offset
+        last_part_cut = (until_bytes % chunk_size) + 1
+        part_count = math.ceil(req_length / chunk_size)
+        
+        body = streamer.yield_file(file_id, 0, offset, first_part_cut, last_part_cut, part_count, chunk_size)
+        
+        status_code = 206 if range_header else 200
+        headers = {
+            "Content-Type": media.mime_type or "application/octet-stream",
+            "Accept-Ranges": "bytes",
+            "Content-Disposition": f'inline; filename="{media.file_name}"',
+            "Content-Length": str(req_length)
+        }
+        if range_header:
+            headers["Content-Range"] = f"bytes {from_bytes}-{until_bytes}/{file_size}"
+            
+        return StreamingResponse(body, status_code=status_code, headers=headers)
+        
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found.")
+    except Exception:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal streaming error.")
+
+# =====================================================================================
+# --- MAIN EXECUTION BLOCK: Script ko yahan se chalaya jaata hai ---
+# =====================================================================================
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
+    # Uvicorn server ko start karo. Woh automatically 'lifespan' function ko chala dega.
     uvicorn.run("app:app", host="0.0.0.0", port=port)
