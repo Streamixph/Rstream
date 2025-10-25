@@ -1,11 +1,10 @@
-# webserver.py (FINAL GUARANTEED FIX)
+# webserver.py (THE REAL-REAL-FINAL-FINAL CODE)
 
 import math
 import traceback
 import os
-import sys
-import asyncio
 from contextlib import asynccontextmanager
+from typing import Optional
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -17,39 +16,27 @@ from config import Config
 from bot import bot, initialize_clients, multi_clients, work_loads, get_readable_file_size
 from database import db
 
+# --- Lifespan Manager ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print("Web server is starting up...")
     print("Starting bot...")
     await bot.start()
-    print("Bot started.")
+    print("Main bot started.")
 
-    # --- THE REAL, GUARANTEED FIX ---
-    # Hum bot ko channel "seekhne" ke liye ek message bhejkar turant delete kar denge.
-    # Yeh aapke manual solution ko automate karta hai aur 100% kaam karega.
-    print(f"Warming up cache for STORAGE_CHANNEL ({Config.STORAGE_CHANNEL})...")
+    # --- YEH HAI ASLI FINAL FIX ---
+    # Bot ko uske saare chats ki list fetch karne ke liye force karo
+    # Isse saare channels (including STORAGE_CHANNEL) uski memory (cache) mein aa jayenge.
     try:
-        # Ek temporary message bhejo
-        sent_msg = await bot.send_message(
-            chat_id=Config.STORAGE_CHANNEL,
-            text="`Bot Initialized. This message will be deleted.`"
-        )
-        # Turant uss message ko delete kar do
-        await bot.delete_messages(
-            chat_id=Config.STORAGE_CHANNEL,
-            message_ids=sent_msg.id
-        )
-        print("✅ Cache warmup successful.")
+        print("Caching all chats the bot is a member of...")
+        async for _ in bot.get_dialogs():
+            pass
+        print("Chat caching complete. Bot now knows about all its channels.")
     except Exception as e:
-        print("\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print(f"!!! FATAL ERROR: Could not warm up cache for STORAGE_CHANNEL.")
-        print(f"!!! ERROR: {e}")
-        print("!!! Please CHECK:")
-        print("!!! 1. Is your STORAGE_CHANNEL ID correct?")
-        print("!!! 2. Is the bot an ADMIN with SEND and DELETE message permissions?")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
-        sys.exit(1)
+        print(f"!!! FATAL ERROR: Could not get dialogs. This is unexpected. Error: {e}")
+    # --- FIX KHATAM ---
     
-    print("Initializing other clients...")
+    print("Initializing clients...")
     await initialize_clients(bot)
     print("All clients initialized. Application startup complete.")
     yield
@@ -61,8 +48,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 class_cache = {}
-
-# --- Baaki ka code bilkul same hai, usmein koi badlav nahi ---
 
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
@@ -120,12 +105,14 @@ async def show_file_page(request: Request, unique_id: str):
         file_msg = await main_bot.get_messages(Config.STORAGE_CHANNEL, storage_msg_id)
         media = file_msg.document or file_msg.video or file_msg.audio
         if not media: raise HTTPException(404, "File media not found.")
+        
         original_file_name = media.file_name
         masked_name = mask_filename(original_file_name)
         file_size = get_readable_file_size(media.file_size)
         mime_type = media.mime_type or "application/octet-stream"
         is_media = mime_type.startswith("video/") or mime_type.startswith("audio/")
         dl_link = f"{Config.BASE_URL}/dl/{storage_msg_id}"
+        
         context = {
             "request": request, "file_name": masked_name, "file_size": file_size,
             "is_media": is_media, "direct_dl_link": dl_link,
