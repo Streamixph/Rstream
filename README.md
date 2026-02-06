@@ -8,7 +8,7 @@
 
 ---
 
-# 🚀 Streamix PH Stream
+# 🚀 Watch Movies Streamix PH Stream
 
 A **Telegram Streaming Bot** powered by **Pyrogram**, designed **Docker-only** for fast, stable, and scalable streaming.
 
@@ -26,7 +26,7 @@ A **Telegram Streaming Bot** powered by **Pyrogram**, designed **Docker-only** f
 ## 📦 Deployment (Docker Only)
 
 ```bash
-git clone https://github.com/yourusername/streamix-ph-stream.git
+git clone https://github.com/Streamiph/streamix-ph-stream.git
 cd streamix-ph-stream
 docker build -t streamix-ph-stream .
 docker run -d --name streamix streamix-ph-stream
@@ -61,6 +61,7 @@ STORAGE_CHANNEL=
 
 ## 🌐 Services Used
 
+* 🍿** Streamixph Movie 👉 .[https://streamixphpro.infinityfreeapp.com(https://streamixphpro.infinityfreeapp.com)]
 * 🗄 **MongoDB** → [https://www.mongodb.com](https://www.mongodb.com)
 * ⏱ **Uptime Robot** → [https://uptimerobot.com](https://uptimerobot.com)
 * 🚀 **Render Deploy** → [https://render.com](https://render.com)
@@ -94,6 +95,3 @@ Kung gusto mo pa boss:
 - 🔥 **mas colorful animation**
 - 🧷 **GitHub badges** (Docker, Python, Telegram)
 - ⚡ **one-click deploy buttons**
-
-sabihin mo lang kung alin, ayos natin agad 💪😎
-```
