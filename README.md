@@ -1,16 +1,27 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=34&pause=900&color=00FFD5&center=true&vCenter=true&width=700&lines=STREAMIX+PH+STREAM;Telegram+Streaming+Bot;Docker+%2B+Pyrogram+Only" />
+<!-- Watch Here Banner -->
+<a href="https://streamixphpro.infinityfreeapp.com" target="_blank">
+<img src="https://readme-typing-svg.demolab.com?font=Orbitron&size=26&pause=800&color=FF00FF&center=true&vCenter=true&width=800&lines=WATCH+HERE+%7C+STREAMIX+PH+MOVIE+STREAM+SITE;CLICK+TO+OPEN+STREAMIX+PH" />
+</a>
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=90&section=footer"/>
+<br/>
+
+<!-- Animated Site Name -->
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=36&pause=900&color=00FFD5&center=true&vCenter=true&width=750&lines=STREAMIX+PH+STREAM;OFFICIAL+MOVIE+STREAM+SITE;FAST+%E2%80%A2+SECURE+%E2%80%A2+UPDATED" />
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=gradient&height=3"/>
 
 </div>
 
 ---
 
-# 🚀 Watch Movies Streamix PH Stream
+# 🚀 Streamix PH Stream
 
-A **Telegram Streaming Bot** powered by **Pyrogram**, designed **Docker-only** for fast, stable, and scalable streaming.
+A **Telegram Streaming Bot & Movie Streaming Platform** powered by **Pyrogram**, designed **Docker-only** for fast, stable, and scalable streaming.
+
+🌐 **Official Website:**  
+👉 https://streamixphpro.infinityfreeapp.com
 
 ---
 
@@ -26,7 +37,7 @@ A **Telegram Streaming Bot** powered by **Pyrogram**, designed **Docker-only** f
 ## 📦 Deployment (Docker Only)
 
 ```bash
-git clone https://github.com/Streamiph/streamix-ph-stream.git
+git clone https://github.com/Streamixph/streamix-ph-stream.git
 cd streamix-ph-stream
 docker build -t streamix-ph-stream .
 docker run -d --name streamix streamix-ph-stream
@@ -61,20 +72,10 @@ STORAGE_CHANNEL=
 
 ## 🌐 Services Used
 
-* 🍿** Streamixph Movie 👉 .[https://streamixphpro.infinityfreeapp.com(https://streamixphpro.infinityfreeapp.com)]
-* 🗄 **MongoDB** → [https://www.mongodb.com](https://www.mongodb.com)
-* ⏱ **Uptime Robot** → [https://uptimerobot.com](https://uptimerobot.com)
-* 🚀 **Render Deploy** → [https://render.com](https://render.com)
-* 🤗 **HuggingFace Deploy** → [https://huggingface.co](https://huggingface.co)
-
----
-
-## ✨ Preview
-
-```txt
-[ STREAMIX PH STREAM ]
-Fast • Secure • Stream Ready
-```
+* 🗄 MongoDB → [https://www.mongodb.com](https://www.mongodb.com)
+* ⏱ Uptime Robot → [https://uptimerobot.com](https://uptimerobot.com)
+* 🚀 Render Deploy → [https://render.com](https://render.com)
+* 🤗 HuggingFace Deploy → [https://huggingface.co](https://huggingface.co)
 
 ---
 
@@ -87,11 +88,8 @@ Built with ❤️ using Pyrogram & Docker
 
 ## 📜 License
 
-MIT License – free to use and modify
+MIT License – free to use and modify to use
 
-```
-
-Kung gusto mo pa boss:
-- 🔥 **mas colorful animation**
-- 🧷 **GitHub badges** (Docker, Python, Telegram)
-- ⚡ **one-click deploy buttons**
+credit
+roderick v almaras
+krishhna
